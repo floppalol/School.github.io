@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Federalism Project</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
+<style>
+:root{
+  --bg:#0f1724;
+  --accent:#38bdf8;
+  --accent2:#f4b400;
+  --muted:rgba(255,255,255,0.75);
+  --ff:'Inter',sans-serif;
+}
+
+/* reset */
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:var(--ff);
+  background:radial-gradient(circle at top left,var(--accent) -50%,#00122b 60%);
+  height:100vh;
+  color:#fff;
+  overflow:hidden;
+  position:relative;
+}
+
+/* header */
+header{
+  position:absolute;
+  top:0;left:0;width:100%;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:20px 40px;
+  z-index:10;
+  background:rgba(0,0,0,0.3);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(56,189,248,0.3);
+}
+header h1{font-size:22px;font-weight:800; text-shadow:0 0 10px var(--accent);}
+nav a{color:var(--muted);margin-left:15px;text-decoration:none;font-weight:600;transition:all 0.3s;}
+nav a:hover{color:#fff; text-shadow:0 0 10px var(--accent);}
+
+/* map */
+#map-container{
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+}
+svg.map-svg{
+  width:90vw;
+  height:85vh;
+  border-radius:20px;
+  box-shadow:0 0 40px rgba(0,0,0,0.5);
+  background:rgba(255,255,255,0.05);
+  backdrop-filter:blur(6px);
+  transition:transform .3s;
+}
+.state{
+  fill:#17324a;
+  stroke:#0d2538;
+  stroke-width:0.5;
+  cursor:pointer;
+  transition:all .2s;
+}
+.state:hover{fill:#2b4a6b; filter:drop-shadow(0 0 8px #38bdf8);}
+.state.active{fill:var(--accent); stroke:#fff; stroke-width:1.2; filter:drop-shadow(0 0 12px var(--accent));}
+
+/* tooltip */
+#tooltip{
+  position:fixed;
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  font-size:13px;
+  pointer-events:none;
+  display:none;
+  transform:translate(-50%, -140%);
+  z-index:100;
+  text-shadow:0 0 5px #38bdf8;
+}
+
+/* side info panel */
+#info-panel{
+  position:absolute;
+  top:20px;
+  right:-440px;
+  width:400px;
+  height:90vh;
+  background:rgba(15,23,42,0.95);
+  border-left:3px solid var(--accent);
+  border-radius:25px;
+  box-shadow:-5px 0 40px var(--accent);
+  padding:30px;
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+  transition:right 0.5s cubic-bezier(0.77,0,0.175,1);
+  z-index:20;
+  backdrop-filter:blur(12px);
+  overflow-y:auto;
+}
+#info-panel.active{right:20px;}
+
+#info-panel h2{
+  margin:0;
+  color:var(--accent);
+  font-size:28px;
+  text-shadow:0 0 15px var(--accent);
+  letter-spacing:1px;
+  animation: glowTitle 2s infinite alternate;
+}
+#info-panel p{
+  font-size:14px;
+  color:#cbd5e1;
+  line-height:1.6;
+  padding:12px 15px;
+  border-radius:15px;
+  background:rgba(56,189,248,0.05);
+  box-shadow:0 0 15px rgba(56,189,248,0.1);
+  transition:all 0.3s;
+  backdrop-filter:blur(2px);
+}
+#info-panel hr{
+  border:none;
+  height:1px;
+  background:rgba(56,189,248,0.2);
+  margin:10px 0;
+}
+
+.close-btn{
+  background:none;
+  border:none;
+  color: var(--accent);
+  font-size:22px;
+  align-self:flex-end;
+  cursor:pointer;
+  text-shadow:0 0 12px var(--accent);
+  transition:transform 0.3s;
+}
+.close-btn:hover{transform:rotate(90deg);}
+
+/* glow bars */
+.glow-bar{
+  height:3px;
+  width:80%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius:5px;
+  animation: moveGlow 2s infinite linear;
+}
+@keyframes moveGlow{
+  0%{transform:translateX(-100%);}
+  100%{transform:translateX(100%);}
+}
+@keyframes glowTitle{
+  0%{text-shadow:0 0 10px var(--accent);}
+  100%{text-shadow:0 0 25px var(--accent);}
+}
+
+/* floating particles */
+.particle{
+  position:absolute;
+  border-radius:50%;
+  background:rgba(248, 56, 56, 0.2);
+  pointer-events:none;
+  animation: floatParticle linear infinite;
+}
+@keyframes floatParticle{
+  0%{transform:translateY(0);}
+  100%{transform:translateY(-120vh);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Federalism Project</h1>
+  <nav>
+    <a href="#">Map</a>
+    <a href="#">About</a>
+  </nav>
+</header>
+
+<div id="map-container">
+  <svg id="us-map" class="map-svg"></svg>
+</div>
+
+<div id="tooltip"></div>
+
+<!-- side panel -->
+<div id="info-panel">
+  <button class="close-btn" onclick="closePanel()">_</button>
+  <h2 id="panel-title">State</h2>
+  <div class="glow-bar"></div>
+  
+  <p id="law1">Law 1 template</p>
+  <p id="law2">Law 2 template</p>
+  <p id="law3">Law 3 template</p>
+  <p id="law4">Law 4 template</p>
+  <p id="law5">Law 5 template</p>
+
+  <div class="glow-bar"></div>
+</div>
+
+<script>
+// background particles
+for(let i=0;i<60;i++){
+  let p = document.createElement('div');
+  p.className='particle';
+  p.style.width = Math.random()*4+2+'px';
+  p.style.height = Math.random()*4+2+'px';
+  p.style.left = Math.random()*100+'vw';
+  p.style.top = Math.random()*100+'vh';
+  p.style.animationDuration = (Math.random()*10+5)+'s';
+  document.body.appendChild(p);
+}
+
+// map setup
+const width = window.innerWidth*0.9;
+const height = window.innerHeight*0.85;
+const svg = d3.select("#us-map").attr("viewBox",[0,0,width,height]);
+const projection = d3.geoAlbersUsa().translate([width/2,height/2]).scale(Math.min(width,height)*1.2);
+const path = d3.geoPath().projection(projection);
+const tooltip = d3.select("#tooltip");
+const g = svg.append("g");
+
+// zoom
+const zoom = d3.zoom().scaleExtent([1,8]).on("zoom",(event)=>g.attr("transform",event.transform));
+svg.call(zoom);
+
+// fetch US map
+fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json")
+.then(r=>r.json())
+.then(us=>{
+  const states = topojson.feature(us,us.objects.states).features;
+  g.selectAll("path")
+    .data(states)
+    .enter()
+    .append("path")
+    .attr("class","state")
+    .attr("d",path)
+    .attr("data-name",d=>d.properties.name)
+    .on("mousemove",(event,d)=>{
+      tooltip.style("display","block")
+             .style("left",event.pageX+"px")
+             .style("top",(event.pageY-12)+"px")
+             .text(d.properties.name);
+    })
+    .on("mouseout",()=>tooltip.style("display","none"))
+    .on("click",(event,d)=>{
+      const name = d.properties.name;
+      if(name==="California"||name==="Michigan"){
+        openPanel(name);
+        g.selectAll(".state").classed("active",false);
+        d3.select(event.currentTarget).classed("active",true);
+      }else{
+        g.selectAll(".state").classed("active",false);
+        d3.select(event.currentTarget).classed("active",true);
+      }
+    });
+  g.selectAll("path").filter(d=>d.properties.name==="California"||d.properties.name==="Michigan").classed("active",true);
+});
+
+// open panel function
+function openPanel(state){
+  const panel = document.getElementById("info-panel");
+  const title = document.getElementById("panel-title");
+  const l1 = document.getElementById("law1");
+  const l2 = document.getElementById("law2");
+  const l3 = document.getElementById("law3");
+  const l4 = document.getElementById("law4");
+  const l5 = document.getElementById("law5");
+
+  if(state==="California"){
+    title.textContent="California";
+
+    l1.textContent = "Gun Laws: California has stricter gun laws than Michigan, including bans on assault weapons and high-capacity magazines. This is partly due to its higher population density and history of gun violence.";
+    l2.textContent = "Immigration/Political Laws: California allows in-state tuition for undocumented immigrants, unlike Michigan. This reflects California's larger immigrant population and political climate.";
+    l3.textContent = "Environmental Laws: California has aggressive emissions standards and renewable energy mandates, differing from Michigan due to its varied geography and coastal environmental concerns.";
+    l4.textContent = "Death Penalty: California has a moratorium on executions, while Michigan abolished it entirely. The state's political climate and voter initiatives influence these differences.";
+    l5.textContent = "Speed Limits: California has variable speed limits in certain highways (e.g., environmental zones), unlike Michigan. Geography, urban traffic density, and environmental considerations play a role.";
+  } else if(state==="Michigan"){
+    title.textContent="Michigan";
+
+    l1.textContent = "Gun Laws: Michigan allows concealed carry with fewer restrictions, reflecting its more rural population and historical culture around firearms.";
+    l2.textContent = "Immigration/Political Laws: Michigan does not provide in-state tuition for undocumented immigrants, which reflects different political priorities compared to California.";
+    l3.textContent = "Environmental Laws: Michigan focuses more on water quality (Great Lakes) than air emissions, due to its geography and economic reliance on the automotive industry.";
+    l4.textContent = "Death Penalty: Michigan abolished the death penalty in 1846, one of the earliest states to do so, reflecting historical legal traditions.";
+    l5.textContent = "Speed Limits: Standard fixed speed limits are enforced statewide, reflecting less densely populated areas compared to California.";
+  }
+
+  panel.classList.add("active");
+}
+
+
+// close panel
+function closePanel(){ document.getElementById("info-panel").classList.remove("active"); }
+
+// responsive resize
+window.addEventListener("resize",()=>{
+  const newWidth = window.innerWidth*0.9;
+  const newHeight = window.innerHeight*0.85;
+  svg.attr("viewBox",[0,0,newWidth,newHeight]);
+  projection.translate([newWidth/2,newHeight/2]).scale(Math.min(newWidth,newHeight)*1.2);
+  g.selectAll("path").attr("d",path);
+});
+</script>
+
+</body>
+</html>
